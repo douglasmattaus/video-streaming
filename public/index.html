@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="socket.io/socket.io.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <title>View</title>
+    <style>
+        #video{
+            width: 1000px;
+            height: 565px;
+            background: black;
+            z-index: 1000;
+          
+        }
+        #camera{
+         
+            z-index: 800;   
+        }
+    </style>
+</head>
+<body>
+    <video id='video'></video>
+    <img id='camera'>
+    <button onclick="startRecording()">Start recording</button>
+    <button onclick="stopRecording()">Stop recording</button>
+    <script>
+        const socket = io.connect();
+        const camera = document.getElementById('camera')
+        const video = document.getElementById('video')
+
+        let mediaRecorder, audioChunks = []
+
+        socket.on('new-image', imagePath=>{
+            camera.src = '/'+imagePath
+        })
+
+        socket.on('recordingVideo', recording=>{
+            video.src = recording
+            video.play()
+        })
+
+        
+        navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+            mediaRecorder = new MediaRecorder(stream);
+
+            mediaRecorder.addEventListener("dataavailable", event => {
+                audioChunks.push(event.data);
+            });
+
+            mediaRecorder.addEventListener("stop", () => {
+                const audioBlob = new Blob(audioChunks, {'type': 'audio/ogg; codecs=opus'});
+                const audioUrl = URL.createObjectURL(audioBlob);
+
+                const file = new FormData();
+                file.append("audio_data", audioBlob, "recording.ogg");
+                axios.post('/recording', file, {
+                    headers:{
+                        "Content-Type":"multipart/form-data"
+                    }
+                }).then((response)=>{
+                    console.log(response)
+                })
+
+
+                //const audio = new Audio(audioUrl);  
+                //audio.play();
+            });
+            
+        });
+
+        function startRecording(){
+            audioChunks = []
+            mediaRecorder.start();
+            setInterval(function(){
+                mediaRecorder.stop()
+                audioChunks = []
+                mediaRecorder.start()
+            }, 2500);
+        }
+
+        function stopRecording(){
+            mediaRecorder.stop();
+        }
+
+        
+    </script>
+</body>
+</html>

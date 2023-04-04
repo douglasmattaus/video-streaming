@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="socket.io/socket.io.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <title>Stream</title>
+</head>
+<body>
+    <video id="video" width="640" height="480" autoplay></video>
+    <canvas id="canvas" style="display: none;"></canvas>
+    <button onclick="capture()">Capture</button>
+    <p id='printresult'></p>
+    <script>
+        const socket = io.connect();
+
+        var video = document.getElementById('video');
+        let mediaRecorder, videoChunks = []
+        video.muted = true
+
+        navigator.mediaDevices.getUserMedia({ video: {facingMode: 'environment' }, audio:true })
+        .then(function(stream) {
+            
+            mediaRecorder = new MediaRecorder(stream);
+            video.srcObject = stream
+            video.play();
+
+            mediaRecorder.addEventListener("dataavailable", event => {
+                videoChunks.push(event.data);
+            });
+
+            mediaRecorder.addEventListener("stop", () => {
+                const videoBlob = new Blob(videoChunks, {'type': 'audio/ogg; codecs=opus'});
+                const file = new FormData();
+                file.append("video_data", videoBlob, "video.mp4");
+                axios.post('/recordingVideo', file, {
+                    headers:{
+                        "Content-Type":"multipart/form-data"
+                    }
+                }).then((response)=>{
+                    console.log(response)
+                })
+            });
+
+        });
+
+
+        /*setInterval(function(){
+            capture()
+        }, 2000);*/
+        
+        function capture(){
+
+            var canvas = document.getElementById('canvas');     
+            var video = document.getElementById('video');
+
+            videoChunks = []
+            mediaRecorder.start();
+
+            setInterval(function(){
+                mediaRecorder.stop()
+                videoChunks = []
+                mediaRecorder.start()
+
+
+                canvas.width = 1000;
+                canvas.height = 565;
+                canvas.getContext('2d').drawImage(video, 0, 0,  1000,  565);  
+                const imageEncoded = canvas.toDataURL().slice(22);
+                socket.emit('image-encoded', imageEncoded)
+            }, 5000);   
+        }
+
+        socket.on('recording', (audioUrl)=>{
+            const audio = new Audio(audioUrl);
+            audio.play()
+        })
+
+    </script>
+</body>
+</html>
